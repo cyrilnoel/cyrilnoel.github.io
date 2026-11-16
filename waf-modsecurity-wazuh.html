@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bloquer puis détecter : ModSecurity et Wazuh – Cyrille Kouam</title>
+<meta name="description" content="Retour d’expérience : un WAF ModSecurity qui bloque en amont et un SIEM Wazuh qui détecte juste après.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f2f5f8;--ink:#101828;--steel:#475467;--line:#d5dce5;--teal:#0e7c7b;--alert:#c8401a;--log:#0f1b2d;--logtxt:#c9d6e6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1.125rem/1.75 "Bricolage Grotesque",system-ui,sans-serif}
+a{color:var(--teal);text-underline-offset:3px}
+a:focus-visible{outline:3px solid var(--alert);outline-offset:3px}
+.wrap{max-width:44rem;margin:0 auto;padding:0 1.5rem}
+.back{display:block;padding:1.25rem 0;border-bottom:1px solid var(--line);text-decoration:none;font-weight:600}
+h1{font-size:clamp(2rem,5vw,3rem);line-height:1.1;font-weight:800;letter-spacing:-.02em;margin:2.5rem 0 .75rem}
+h2{font-size:1.5rem;line-height:1.25;margin:2.5rem 0 .5rem}
+.meta{color:var(--steel);font-size:.95rem;margin:0 0 2rem}
+pre{background:var(--log);color:var(--logtxt);border-radius:8px;padding:1rem 1.2rem;overflow-x:auto;font:400 .85rem/1.7 "IBM Plex Mono",ui-monospace,monospace}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.9em}
+blockquote{margin:1.5rem 0;padding-left:1.25rem;border-left:4px solid var(--teal);color:var(--steel)}
+footer{margin:3.5rem 0 3rem;padding-top:1.5rem;border-top:1px solid var(--line);color:var(--steel);font-size:.95rem}
+.todo{background:#fff4d6;padding:0 .3em;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="back" href="../index.html#articles">← Tous les articles</a>
+<article>
+  <h1>Bloquer puis détecter : ModSecurity et Wazuh, deux couches complémentaires</h1>
+  <p class="meta"><time datetime="2026-11-16">16 novembre 2026</time> · Wazuh, ModSecurity, Apache</p>
+
+  <p>Dans mon projet de fin d’études, j’ai monté sur trois machines virtuelles un SIEM (Wazuh), une supervision (Prometheus et Grafana) et un pare-feu applicatif (ModSecurity) devant Apache. Une question revient souvent : si le WAF bloque déjà l’attaque, à quoi sert le SIEM ? Voici ce que j’ai observé en conditions réelles.</p>
+
+  <h2>Le test</h2>
+  <p>J’ai simulé le comportement d’un scanner qui cherche des pages d’administration connues, avec de simples requêtes <code>curl</code> sur trois chemins : <code>/admin</code>, <code>/wp-login.php</code> et <code>/phpmyadmin/</code>.</p>
+  <pre>curl -i http://&lt;ip-apache&gt;/wp-login.php</pre>
+
+  <h2>Ce que fait le WAF</h2>
+  <p>ModSecurity, avec les règles OWASP CRS et mes règles personnalisées (fichier <code>custom-rules.conf</code>, règle d’identifiant 1001), a bloqué les trois requêtes en <strong>403 Forbidden</strong>. Le blocage a lieu avant que la requête n’atteigne l’application.</p>
+
+  <h2>Ce que voit le SIEM</h2>
+  <p>Juste après, Wazuh a détecté l’événement : la règle 31101 s’est déclenchée sur le code 403 enregistré dans le journal d’accès d’Apache. Les deux outils ne voient pas la même chose :</p>
+  <blockquote>Le WAF agit sur la requête, en temps réel. Le SIEM garde la trace, la met en contexte et permet d’enquêter après coup.</blockquote>
+  <p>Sans le WAF, l’attaque passe et Wazuh la journalise seulement après. Sans le SIEM, l’attaque est bloquée mais personne ne sait qu’elle a eu lieu, ni d’où elle venait, ni si elle se répète.</p>
+
+  <h2>Un piège : des alertes invisibles</h2>
+  <p>Au début, mon dashboard restait vide alors que Wazuh générait bien des alertes. Elles s’accumulaient dans <code>alerts.log</code> sans jamais être indexées dans OpenSearch. La pièce manquante était <strong>Filebeat</strong>, qui transfère les alertes du Manager vers l’Indexer. Une fois installé, 52 alertes sont apparues dans <code>wazuh-alerts-*</code>, et mes tests étaient visibles dans Threat Hunting.</p>
+
+  <h2>Ce que j’en retiens</h2>
+  <p>Une chaîne de détection ne vaut que par son maillon le plus faible : une alerte non indexée est une alerte perdue. Et c’est en testant de bout en bout, avec de vraies requêtes, qu’on découvre ce genre de trou.</p>
+  <p><span class="todo">À compléter : captures d’écran du log ModSecurity et du dashboard Wazuh, lien vers le dépôt</span></p>
+</article>
+<footer>Cyrille Kouam · <a href="https://www.linkedin.com/in/cyrille-kouam-743873197">LinkedIn</a> · <a href="../index.html">Retour au portfolio</a></footer>
+</div>
+</body>
+</html>
